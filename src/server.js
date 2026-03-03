@@ -46,7 +46,52 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 8000;
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   logger.info(`Server is running on port ${PORT}`);
   logger.info(`Environment: ${process.env.NODE_ENV}`);
+});
+
+// Graceful shutdown handling
+const gracefulShutdown = (signal) => {
+  logger.info(`${signal} received, shutting down gracefully...`);
+  
+  server.close(async () => {
+    try {
+      // Close MongoDB connection
+      const mongoose = require('mongoose');
+      await mongoose.connection.close();
+      logger.info('MongoDB connection closed');
+      process.exit(0);
+    } catch (error) {
+      logger.error('Error during shutdown:', { error: error.message });
+      process.exit(1);
+    }
+  });
+  
+  // Force shutdown after 30 seconds
+  setTimeout(() => {
+    logger.error('Forcing shutdown after 30 seconds...');
+    process.exit(1);
+  }, 30000);
+};
+
+// Handle termination signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught errors
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', { 
+    message: error.message,
+    stack: error.stack 
+  });
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection:', { 
+    reason: reason,
+    promise: promise 
+  });
+  process.exit(1);
 });
