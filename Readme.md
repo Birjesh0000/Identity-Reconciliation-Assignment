@@ -85,6 +85,106 @@ curl -X POST http://localhost:8000/api/identify \
 
 ---
 
+## 🧪 Test with Postman
+
+### Step 1: Open Postman
+
+1. Download [Postman](https://www.postman.com/downloads/)
+2. Open Postman and create new request
+
+### Step 2: Configure Request
+
+**Method**: `POST`
+**URL**: `http://localhost:8000/api/identify`
+
+**Headers Tab:**
+```
+Content-Type: application/json
+```
+
+**Body Tab (Select "raw" and "JSON"):**
+```json
+{
+  "email": "john@example.com",
+  "phoneNumber": "9191919191"
+}
+```
+
+### Step 3: Send Request
+
+Click **Send** button and check response
+
+**Expected 200 Response:**
+```json
+{
+  "contact": {
+    "primaryContatctId": "60d5ec49abc123def4567890",
+    "emails": ["john@example.com"],
+    "phoneNumbers": ["9191919191"],
+    "secondaryContactIds": []
+  }
+}
+```
+
+---
+
+## 📝 Test Cases
+
+### Test 1: New Contact
+**Body:**
+```json
+{"email":"alice@example.com","phoneNumber":"9111111111"}
+```
+**Expected**: Creates primary contact with empty `secondaryContactIds`
+
+### Test 2: Existing Contact with New Email
+**Body (first request):**
+```json
+{"email":"bob@example.com","phoneNumber":"9222222222"}
+```
+**Body (second request):**
+```json
+{"email":"bob.new@example.com","phoneNumber":"9222222222"}
+```
+**Expected**: Secondary contact created, linked to primary
+
+### Test 3: Cross-Group Merge
+**Body (request 1):**
+```json
+{"email":"charlie@example.com","phoneNumber":"9333333333"}
+```
+**Body (request 2):**
+```json
+{"email":"diana@example.com","phoneNumber":"9444444444"}
+```
+**Body (request 3 - triggers merge):**
+```json
+{"email":"charlie@example.com","phoneNumber":"9444444444"}
+```
+**Expected**: Two groups merge, oldest stays primary
+
+### Test 4: Validation Error (Missing Fields)
+**Body:**
+```json
+{}
+```
+**Expected 400 Error:**
+```json
+{"error":"At least one valid email or phoneNumber is required"}
+```
+
+### Test 5: Invalid Email
+**Body:**
+```json
+{"email":"invalid-email","phoneNumber":"9555555555"}
+```
+**Expected 400 Error:**
+```json
+{"error":"Invalid email format"}
+```
+
+---
+
 ## 📁 Project Structure
 
 ```
