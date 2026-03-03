@@ -261,6 +261,42 @@ const fixMultiplePrimaries = async (contacts) => {
   }
 };
 
+/**
+ * Build the final response object in exact spec format
+ * Pure function - formats data for API response
+ * 
+ * Response format exactly as required:
+ * {
+ *   "contact": {
+ *     "primaryContatctId": number,  // Note: spec has this typo
+ *     "emails": string[],           // First element is primary email
+ *     "phoneNumbers": string[],     // First element is primary phone
+ *     "secondaryContactIds": number[]
+ *   }
+ * }
+ * 
+ * @param {Object} primary - Primary contact
+ * @param {Array} emails - All emails (primary first)
+ * @param {Array} phoneNumbers - All phone numbers (primary first)
+ * @param {Array} allContacts - All contacts in the group
+ * @returns {Object} - Response object matching spec exactly
+ */
+const buildIdentifyResponse = (primary, emails, phoneNumbers, allContacts) => {
+  // Get secondary contact IDs (all except primary)
+  const secondaryContactIds = allContacts
+    .filter((c) => c._id.toString() !== primary._id.toString())
+    .map((c) => c._id);
+
+  return {
+    contact: {
+      primaryContatctId: primary._id, // Exact field name from spec (with typo)
+      emails,                          // Primary email first
+      phoneNumbers,                    // Primary phone first
+      secondaryContactIds,             // All secondary contact IDs
+    },
+  };
+};
+
 module.exports = {
   fetchConnectedContacts,
   resolvePrimary,
@@ -268,4 +304,5 @@ module.exports = {
   isNewContactInfo,
   createOrLinkContact,
   fixMultiplePrimaries,
+  buildIdentifyResponse,
 };

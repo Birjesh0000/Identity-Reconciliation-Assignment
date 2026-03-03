@@ -6,6 +6,7 @@ const {
   consolidateContactInfo,
   createOrLinkContact,
   fixMultiplePrimaries,
+  buildIdentifyResponse,
 } = require('../services/identifyService');
 
 // POST /api/identify
@@ -43,17 +44,13 @@ router.post('/', async (req, res) => {
       updatedContacts
     );
 
-    // Step 6: Return formatted response
-    const response = {
-      contact: {
-        primaryContactId: finalPrimary._id,
-        emails,
-        phoneNumbers,
-        secondaryContactIds: updatedContacts
-          .filter((c) => c._id.toString() !== finalPrimary._id.toString())
-          .map((c) => c._id),
-      },
-    };
+    // Step 6: Build response in exact spec format
+    const response = buildIdentifyResponse(
+      finalPrimary,
+      emails,
+      phoneNumbers,
+      updatedContacts
+    );
 
     res.status(200).json(response);
   } catch (error) {
