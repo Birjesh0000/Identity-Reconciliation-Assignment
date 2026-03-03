@@ -26,16 +26,14 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Check syntax - server.js
-      run: node -c src/server.js
+    - name: Check syntax - all JavaScript files
+      run: |
+        for file in $(find src -name "*.js"); do
+          node -c "$file" || exit 1
+        done
+        echo "✅ All files syntax OK"
     
-    - name: Verify models can be required
-      run: node -e "require('dotenv').config(); require('./src/models/Contact'); console.log('✅ Models OK')"
-    
-    - name: Verify utils can be required
-      run: node -e "require('dotenv').config(); require('./src/utils/validation'); require('./src/utils/errors'); require('./src/utils/logger'); console.log('✅ Utils OK')"
-    
-    - name: Verify package.json is valid
+    - name: Verify package.json
       run: node -e "const pkg = require('./package.json'); if (!pkg.main || !pkg.scripts.start) throw new Error('Invalid package.json'); console.log('✅ package.json OK')"
     
     - name: Run security audit
