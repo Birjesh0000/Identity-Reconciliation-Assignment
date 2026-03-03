@@ -87,6 +87,20 @@ curl -X POST http://localhost:8000/api/identify \
 
 ## 🧪 Test with Postman
 
+### Quick Health Check (Test Server is Running)
+
+Before testing the `/identify` endpoint, verify server is up:
+
+**Method**: `GET`
+**URL**: `http://localhost:8000/health`
+
+**Expected 200 Response:**
+```json
+{"status":"OK","message":"Server is running"}
+```
+
+---
+
 ### Step 1: Open Postman
 
 1. Download [Postman](https://www.postman.com/downloads/)
