@@ -31,6 +31,20 @@ app.use((req, res, next) => {
 // Routes
 app.use('/api', require('./routes'));
 
+// Root endpoint - API documentation
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    message: 'Bitespeed Identity Reconciliation API',
+    version: '1.0.0',
+    endpoints: {
+      health: '/health',
+      identify: '/api/identify (POST)'
+    },
+    documentation: 'https://github.com/Birjesh0000/Identity-Reconciliation-Assignment#readme'
+  });
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
