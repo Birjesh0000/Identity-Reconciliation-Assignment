@@ -1,0 +1,27 @@
+{
+  "name": "identity-reconciliation",
+  "version": "1.0.0",
+  "description": "Bitespeed Identity Reconciliation Backend - Contact linking service",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js"
+  },
+  "keywords": [
+    "bitespeed",
+    "identity",
+    "reconciliation",
+    "contact-linking"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "mongoose": "^7.8.9"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
