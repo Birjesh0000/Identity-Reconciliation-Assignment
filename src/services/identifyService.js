@@ -70,6 +70,43 @@ const fetchConnectedContacts = async (email, phoneNumber) => {
   return allConnected;
 };
 
+/**
+ * Pure function: Resolve primary contact from a list of connected contacts
+ * 
+ * Rules:
+ * - Oldest contact (by createdAt) becomes primary
+ * - All others become secondary
+ * - Returns primary contact and secondary contact IDs
+ * 
+ * @param {Array} contacts - Array of contact objects, should be sorted by createdAt (ascending)
+ * @returns {Object} { primary, secondaryContactIds }
+ */
+const resolvePrimary = (contacts) => {
+  // Edge case: empty or single contact
+  if (!contacts || contacts.length === 0) {
+    return { primary: null, secondaryContactIds: [] };
+  }
+
+  if (contacts.length === 1) {
+    return {
+      primary: contacts[0],
+      secondaryContactIds: [],
+    };
+  }
+
+  // Oldest contact (first in sorted array) is primary
+  const primary = contacts[0];
+  const secondaryContactIds = contacts
+    .slice(1)
+    .map((contact) => contact._id);
+
+  return {
+    primary,
+    secondaryContactIds,
+  };
+};
+
 module.exports = {
   fetchConnectedContacts,
+  resolvePrimary,
 };
