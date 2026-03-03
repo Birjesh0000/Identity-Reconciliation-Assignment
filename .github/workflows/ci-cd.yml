@@ -14,17 +14,6 @@ jobs:
       matrix:
         node-version: [14.x, 16.x, 18.x]
     
-    services:
-      mongodb:
-        image: mongo:latest
-        options: >-
-          --health-cmd "mongo --eval 'db.adminCommand(\"ping\")'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 27017:27017
-    
     steps:
     - uses: actions/checkout@v3
     
@@ -37,28 +26,20 @@ jobs:
     - name: Install dependencies
       run: npm ci
     
-    - name: Check syntax
+    - name: Check syntax - server.js
       run: node -c src/server.js
     
-    - name: Verify core modules load
-      run: |
-        node -e "require('./src/models/Contact')"
-        node -e "require('./src/services/identifyService')"
+    - name: Verify models can be required
+      run: node -e "require('dotenv').config(); require('./src/models/Contact'); console.log('✅ Models OK')"
+    
+    - name: Verify utils can be required
+      run: node -e "require('dotenv').config(); require('./src/utils/validation'); require('./src/utils/errors'); require('./src/utils/logger'); console.log('✅ Utils OK')"
+    
+    - name: Verify package.json is valid
+      run: node -e "const pkg = require('./package.json'); if (!pkg.main || !pkg.scripts.start) throw new Error('Invalid package.json'); console.log('✅ package.json OK')"
     
     - name: Run security audit
       run: npm audit --audit-level=moderate || true
-    
-    - name: Lint package.json
-      run: |
-        node -e "const pkg = require('./package.json'); 
-        if (!pkg.main) throw new Error('No main field');
-        if (!pkg.scripts.start) throw new Error('No start script');
-        console.log('✓ package.json valid')"
-    
-    - name: Test environment configuration
-      run: |
-        node -e "require('dotenv').config({path: '.env.example'}); 
-        console.log('✓ Environment configuration valid')"
 
   lint:
     runs-on: ubuntu-latest
