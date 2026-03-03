@@ -360,6 +360,73 @@ const buildIdentifyResponse = (primary, emails, phoneNumbers, allContacts) => {
   };
 };
 
+/**
+ * Main orchestration function for identity reconciliation
+ * 
+ * Handles the complete flow:
+ * 1. Fetch all connected contacts by email/phone
+ * 2. Merge separate groups if email and phone match different primaries
+ * 3. Fix multiple primaries (newer becomes secondary)
+ * 4. Create or link new contact if new info provided
+ * 5. Consolidate contact data
+ * 6. Build and return response
+ * 
+ * @param {String} email - Contact email (optional but at least one required)
+ * @param {String} phoneNumber - Contact phone (optional but at least one required)
+ * @returns {Promise<Object>} - Response object with contact data
+ * @throws {Error} - If database operations fail
+ */
+const identifyContact = async (email, phoneNumber) => {
+  // Step 1: Fetch all connected contacts
+  let connectedContacts = await fetchConnectedContacts(email, phoneNumber);
+
+  // Step 2: Handle cross-group merging
+  // When email matches one group's primary and phone matches another group's primary
+  if (connectedContacts.length > 1) {
+    const primaries = connectedContacts.filter(
+      (c) => c.linkPrecedence === 'primary'
+    );
+    if (primaries.length > 1) {
+      // Multiple primaries found - merge groups with oldest as primary
+      await mergeContactGroups(connectedContacts);
+      // Refetch to get merged state
+      connectedContacts = await refetchConnectedContacts(email, phoneNumber);
+    }
+  }
+
+  // Step 3: Handle remaining multiple primaries (safety check)
+  await fixMultiplePrimaries(connectedContacts);
+
+  // Step 4: Refetch if updates were made
+  if (connectedContacts.length > 0) {
+    connectedContacts = await refetchConnectedContacts(email, phoneNumber);
+  }
+
+  // Step 5: Create or link contact if new information provided
+  const { updatedContacts } = await createOrLinkContact(
+    email,
+    phoneNumber,
+    connectedContacts
+  );
+
+  // Step 6: Resolve final primary
+  const { primary: finalPrimary } = resolvePrimary(updatedContacts);
+
+  // Step 7: Consolidate emails and phone numbers
+  const { emails, phoneNumbers } = consolidateContactInfo(
+    finalPrimary,
+    updatedContacts
+  );
+
+  // Step 8: Build response in exact spec format
+  return buildIdentifyResponse(
+    finalPrimary,
+    emails,
+    phoneNumbers,
+    updatedContacts
+  );
+};
+
 module.exports = {
   fetchConnectedContacts,
   refetchConnectedContacts,
@@ -370,4 +437,5 @@ module.exports = {
   mergeContactGroups,
   fixMultiplePrimaries,
   buildIdentifyResponse,
+  identifyContact,
 };
