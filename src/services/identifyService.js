@@ -106,7 +106,166 @@ const resolvePrimary = (contacts) => {
   };
 };
 
+/**
+ * Consolidate emails and phone numbers from all contacts
+ * Primary contact info comes first
+ * Pure function - no DB operations
+ * 
+ * @param {Object} primary - Primary contact object
+ * @param {Array} contacts - All contacts in the group
+ * @returns {Object} { emails, phoneNumbers } with primary info first
+ */
+const consolidateContactInfo = (primary, contacts) => {
+  const emails = [];
+  const phoneNumbers = [];
+  const emailSet = new Set();
+  const phoneSet = new Set();
+
+  // Add primary contact info first
+  if (primary.email && !emailSet.has(primary.email)) {
+    emails.push(primary.email);
+    emailSet.add(primary.email);
+  }
+  if (primary.phoneNumber && !phoneSet.has(primary.phoneNumber)) {
+    phoneNumbers.push(primary.phoneNumber);
+    phoneSet.add(primary.phoneNumber);
+  }
+
+  // Add other contacts' info (excluding primary which is already added)
+  for (const contact of contacts) {
+    if (contact._id.toString() === primary._id.toString()) {
+      continue; // Skip primary as already added
+    }
+
+    if (contact.email && !emailSet.has(contact.email)) {
+      emails.push(contact.email);
+      emailSet.add(contact.email);
+    }
+    if (contact.phoneNumber && !phoneSet.has(contact.phoneNumber)) {
+      phoneNumbers.push(contact.phoneNumber);
+      phoneSet.add(contact.phoneNumber);
+    }
+  }
+
+  return { emails, phoneNumbers };
+};
+
+/**
+ * Check if contact info (email/phone) already exists in the group
+ * Pure function
+ * 
+ * @param {String} email
+ * @param {String} phoneNumber
+ * @param {Array} contacts - All contacts in the group
+ * @returns {Boolean} - true if info is new, false if already exists
+ */
+const isNewContactInfo = (email, phoneNumber, contacts) => {
+  for (const contact of contacts) {
+    if (email && contact.email === email) return false;
+    if (phoneNumber && contact.phoneNumber === phoneNumber) return false;
+  }
+  return true;
+};
+
+/**
+ * Create or link new contact based on existing group
+ * Handles:
+ * - No contacts exist: create new primary
+ * - Contacts exist with new info: create secondary linked to oldest primary
+ * - Two primaries in group: newer becomes secondary
+ * 
+ * @param {String} email
+ * @param {String} phoneNumber
+ * @param {Array} connectedContacts - Existing connected contacts (sorted by createdAt)
+ * @returns {Promise<Object>} - { primary, secondaryContactIds, updatedContacts }
+ */
+const createOrLinkContact = async (email, phoneNumber, connectedContacts) => {
+  // Case 1: No existing contacts - create new primary
+  if (connectedContacts.length === 0) {
+    const newPrimary = await Contact.create({
+      email: email || null,
+      phoneNumber: phoneNumber || null,
+      linkPrecedence: 'primary',
+      linkedId: null,
+    });
+
+    return {
+      primary: newPrimary,
+      secondaryContactIds: [],
+      updatedContacts: [newPrimary],
+    };
+  }
+
+  // Case 2: Contacts exist - resolve primary and check for new info
+  const { primary: resolvedPrimary, secondaryContactIds } =
+    resolvePrimary(connectedContacts);
+
+  // Check if info is new
+  const hasNewInfo = isNewContactInfo(
+    email,
+    phoneNumber,
+    connectedContacts
+  );
+
+  // If no new info, return existing group as-is
+  if (!hasNewInfo) {
+    return {
+      primary: resolvedPrimary,
+      secondaryContactIds,
+      updatedContacts: connectedContacts,
+    };
+  }
+
+  // Case 3: New info exists - create secondary contact linked to primary
+  const newSecondary = await Contact.create({
+    email: email || null,
+    phoneNumber: phoneNumber || null,
+    linkPrecedence: 'secondary',
+    linkedId: resolvedPrimary._id,
+  });
+
+  // Add new secondary to the list and resort
+  const updatedContacts = [...connectedContacts, newSecondary].sort(
+    (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+  );
+
+  return {
+    primary: resolvedPrimary,
+    secondaryContactIds: [...secondaryContactIds, newSecondary._id],
+    updatedContacts,
+  };
+};
+
+/**
+ * Handle multiple primaries in same group (newer becomes secondary to older)
+ * Updates database if needed
+ * 
+ * @param {Array} contacts - All contacts in group
+ * @returns {Promise<void>}
+ */
+const fixMultiplePrimaries = async (contacts) => {
+  const primaries = contacts.filter((c) => c.linkPrecedence === 'primary');
+
+  // If more than one primary, make newer ones secondary
+  if (primaries.length > 1) {
+    // Sort by createdAt - oldest is the true primary
+    const oldestPrimary = primaries[0];
+
+    // Update all other primaries to secondary
+    for (let i = 1; i < primaries.length; i++) {
+      await Contact.findByIdAndUpdate(primaries[i]._id, {
+        linkPrecedence: 'secondary',
+        linkedId: oldestPrimary._id,
+      });
+    }
+  }
+};
+
 module.exports = {
   fetchConnectedContacts,
   resolvePrimary,
+  consolidateContactInfo,
+  isNewContactInfo,
+  createOrLinkContact,
+  fixMultiplePrimaries,
 };
