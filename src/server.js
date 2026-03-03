@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const connectDB = require('./config/database');
+const { errorHandler } = require('./middleware/errorMiddleware');
+const { logger } = require('./utils/logger');
 
 const app = express();
 
@@ -26,15 +28,12 @@ app.use((req, res) => {
   res.status(404).json({ error: 'Route not found' });
 });
 
-// Global error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
+// Global error handling middleware (MUST BE LAST)
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 8000;
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
+  logger.info(`Server is running on port ${PORT}`);
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
 });

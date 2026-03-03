@@ -1,4 +1,6 @@
 const Contact = require('../models/Contact');
+const { DatabaseError } = require('../utils/errors');
+const { logger } = require('../utils/logger');
 
 /**
  * Fetch all connected contacts (transitive closure)
@@ -377,54 +379,73 @@ const buildIdentifyResponse = (primary, emails, phoneNumbers, allContacts) => {
  * @throws {Error} - If database operations fail
  */
 const identifyContact = async (email, phoneNumber) => {
-  // Step 1: Fetch all connected contacts
-  let connectedContacts = await fetchConnectedContacts(email, phoneNumber);
+  try {
+    // Step 1: Fetch all connected contacts
+    let connectedContacts = await fetchConnectedContacts(email, phoneNumber);
 
-  // Step 2: Handle cross-group merging
-  // When email matches one group's primary and phone matches another group's primary
-  if (connectedContacts.length > 1) {
-    const primaries = connectedContacts.filter(
-      (c) => c.linkPrecedence === 'primary'
-    );
-    if (primaries.length > 1) {
-      // Multiple primaries found - merge groups with oldest as primary
-      await mergeContactGroups(connectedContacts);
-      // Refetch to get merged state
+    // Step 2: Handle cross-group merging
+    // When email matches one group's primary and phone matches another group's primary
+    if (connectedContacts.length > 1) {
+      const primaries = connectedContacts.filter(
+        (c) => c.linkPrecedence === 'primary'
+      );
+      if (primaries.length > 1) {
+        // Multiple primaries found - merge groups with oldest as primary
+        await mergeContactGroups(connectedContacts);
+        // Refetch to get merged state
+        connectedContacts = await refetchConnectedContacts(email, phoneNumber);
+      }
+    }
+
+    // Step 3: Handle remaining multiple primaries (safety check)
+    await fixMultiplePrimaries(connectedContacts);
+
+    // Step 4: Refetch if updates were made
+    if (connectedContacts.length > 0) {
       connectedContacts = await refetchConnectedContacts(email, phoneNumber);
     }
+
+    // Step 5: Create or link contact if new information provided
+    const { updatedContacts } = await createOrLinkContact(
+      email,
+      phoneNumber,
+      connectedContacts
+    );
+
+    // Step 6: Resolve final primary
+    const { primary: finalPrimary } = resolvePrimary(updatedContacts);
+
+    // Step 7: Consolidate emails and phone numbers
+    const { emails, phoneNumbers } = consolidateContactInfo(
+      finalPrimary,
+      updatedContacts
+    );
+
+    // Step 8: Build response in exact spec format
+    return buildIdentifyResponse(
+      finalPrimary,
+      emails,
+      phoneNumbers,
+      updatedContacts
+    );
+  } catch (error) {
+    logger.error('Error in identifyContact service', {
+      email,
+      phoneNumber,
+      errorMessage: error.message,
+    });
+
+    // Re-throw if already an AppError
+    if (error.name && error.statusCode) {
+      throw error;
+    }
+
+    // Convert unknown errors to DatabaseError
+    throw new DatabaseError(
+      'Failed to identify contact. Please try again.',
+      error
+    );
   }
-
-  // Step 3: Handle remaining multiple primaries (safety check)
-  await fixMultiplePrimaries(connectedContacts);
-
-  // Step 4: Refetch if updates were made
-  if (connectedContacts.length > 0) {
-    connectedContacts = await refetchConnectedContacts(email, phoneNumber);
-  }
-
-  // Step 5: Create or link contact if new information provided
-  const { updatedContacts } = await createOrLinkContact(
-    email,
-    phoneNumber,
-    connectedContacts
-  );
-
-  // Step 6: Resolve final primary
-  const { primary: finalPrimary } = resolvePrimary(updatedContacts);
-
-  // Step 7: Consolidate emails and phone numbers
-  const { emails, phoneNumbers } = consolidateContactInfo(
-    finalPrimary,
-    updatedContacts
-  );
-
-  // Step 8: Build response in exact spec format
-  return buildIdentifyResponse(
-    finalPrimary,
-    emails,
-    phoneNumbers,
-    updatedContacts
-  );
 };
 
 module.exports = {

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { identifyContact } = require('../services/identifyService');
 const { validateIdentifyRequest } = require('../utils/validation');
+const { ValidationError } = require('../utils/errors');
+const { asyncHandler } = require('../middleware/errorMiddleware');
 
 /**
  * POST /api/identify
@@ -31,15 +33,14 @@ const { validateIdentifyRequest } = require('../utils/validation');
  * - New contact creation
  * - Duplicate detection
  */
-router.post('/', async (req, res) => {
-  try {
+router.post(
+  '/',
+  asyncHandler(async (req, res) => {
     // Validate and sanitize input
     const validation = validateIdentifyRequest(req.body);
 
     if (!validation.isValid) {
-      return res.status(400).json({
-        error: validation.error,
-      });
+      throw new ValidationError(validation.error);
     }
 
     // Use validated and sanitized data
@@ -49,14 +50,7 @@ router.post('/', async (req, res) => {
     const response = await identifyContact(email, phoneNumber);
 
     res.status(200).json(response);
-  } catch (error) {
-    console.error('Error in POST /api/identify:', error.message);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message:
-        process.env.NODE_ENV === 'development' ? error.message : undefined,
-    });
-  }
-});
+  })
+);
 
 module.exports = router;
