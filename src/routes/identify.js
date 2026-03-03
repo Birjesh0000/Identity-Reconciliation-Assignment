@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { identifyContact } = require('../services/identifyService');
+const { validateIdentifyRequest } = require('../utils/validation');
 
 /**
  * POST /api/identify
@@ -32,14 +33,17 @@ const { identifyContact } = require('../services/identifyService');
  */
 router.post('/', async (req, res) => {
   try {
-    const { email, phoneNumber } = req.body;
+    // Validate and sanitize input
+    const validation = validateIdentifyRequest(req.body);
 
-    // Validation: At least one of email or phoneNumber must be provided
-    if (!email && !phoneNumber) {
+    if (!validation.isValid) {
       return res.status(400).json({
-        error: 'At least one of email or phoneNumber is required',
+        error: validation.error,
       });
     }
+
+    // Use validated and sanitized data
+    const { email, phoneNumber } = validation;
 
     // Delegate orchestration to service layer
     const response = await identifyContact(email, phoneNumber);
