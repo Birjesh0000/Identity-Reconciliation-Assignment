@@ -30,6 +30,3 @@ Thumbs.db
 # Build output
 dist/
 build/
-
-# Project specific - Local README (not to be pushed)
-Readme.md
