@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const connectDB = require('./config/database');
 const { errorHandler } = require('./middleware/errorMiddleware');
 const { logger } = require('./utils/logger');
@@ -10,10 +11,22 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
+// Security Middleware
+app.use(helmet()); // Set security HTTP headers
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Request Logging Middleware
+app.use((req, res, next) => {
+  logger.info(`${req.method} ${req.path}`, {
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+  });
+  next();
+});
 
 // Routes
 app.use('/api', require('./routes'));

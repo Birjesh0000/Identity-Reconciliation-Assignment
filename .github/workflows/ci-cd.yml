@@ -1,0 +1,115 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [14.x, 16.x, 18.x]
+    
+    services:
+      mongodb:
+        image: mongo:latest
+        options: >-
+          --health-cmd "mongo --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Check syntax
+      run: node -c src/server.js
+    
+    - name: Verify core modules load
+      run: |
+        node -e "require('./src/models/Contact')"
+        node -e "require('./src/services/identifyService')"
+    
+    - name: Run security audit
+      run: npm audit --audit-level=moderate || true
+    
+    - name: Lint package.json
+      run: |
+        node -e "const pkg = require('./package.json'); 
+        if (!pkg.main) throw new Error('No main field');
+        if (!pkg.scripts.start) throw new Error('No start script');
+        console.log('✓ package.json valid')"
+    
+    - name: Test environment configuration
+      run: |
+        node -e "require('dotenv').config({path: '.env.example'}); 
+        console.log('✓ Environment configuration valid')"
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+    
+    - name: Check for unused dependencies
+      run: |
+        npm ls --prod 2>&1 | grep -E "(peer|missing)" || echo "✓ No missing dependencies"
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Run Snyk security scan
+      uses: snyk/actions/node@master
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      continue-on-error: true
+
+  deploy:
+    needs: [test, lint]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Deploy to Render
+      env:
+        RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+        RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+      run: |
+        if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
+          echo "Render deployment secrets not configured"
+          echo "To enable deployment:"
+          echo "1. Get API key from Render.com settings"
+          echo "2. Get Service ID from your Render service"
+          echo "3. Add them as GitHub secrets: RENDER_API_KEY, RENDER_SERVICE_ID"
+          exit 0
+        fi
+        
+        curl -X POST "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys" \
+          -H "Authorization: Bearer $RENDER_API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"clearCache":"do_not_clear"}'

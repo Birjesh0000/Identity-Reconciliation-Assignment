@@ -4,6 +4,7 @@ const { identifyContact } = require('../services/identifyService');
 const { validateIdentifyRequest } = require('../utils/validation');
 const { ValidationError } = require('../utils/errors');
 const { asyncHandler } = require('../middleware/errorMiddleware');
+const { identifyLimiter } = require('../middleware/rateLimiter');
 
 /**
  * POST /api/identify
@@ -35,6 +36,7 @@ const { asyncHandler } = require('../middleware/errorMiddleware');
  */
 router.post(
   '/',
+  identifyLimiter,
   asyncHandler(async (req, res) => {
     // Validate and sanitize input
     const validation = validateIdentifyRequest(req.body);
