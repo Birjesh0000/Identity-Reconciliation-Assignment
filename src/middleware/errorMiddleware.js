@@ -2,8 +2,8 @@
  * Global error handling middleware
  */
 
-const { AppError, ValidationError } = require('./errors');
-const { logger } = require('./logger');
+const { AppError, ValidationError } = require('../utils/errors');
+const { logger } = require('../utils/logger');
 
 /**
  * Async error wrapper - wraps route handlers to catch errors
