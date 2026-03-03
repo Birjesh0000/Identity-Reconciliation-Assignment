@@ -237,6 +237,69 @@ const createOrLinkContact = async (email, phoneNumber, connectedContacts) => {
 };
 
 /**
+ * Handle cross-group merging when email and phone match different groups
+ * Case: Email matches group A, phone matches group B → merge into one group
+ * 
+ * The oldest contact across both groups becomes primary
+ * All newer contacts and contacts from second group become secondary
+ * 
+ * @param {Array} contacts - All contacted contacts (may include multiple primaries)
+ * @returns {Promise<void>} - Updates database if needed
+ */
+const mergeContactGroups = async (contacts) => {
+  // Find all primary contacts in the group
+  const primaries = contacts.filter((c) => c.linkPrecedence === 'primary');
+
+  // Only proceed if there are multiple primaries (separate groups)
+  if (primaries.length <= 1) {
+    return;
+  }
+
+  // Sort primaries by createdAt - oldest wins
+  const sortedPrimaries = [...primaries].sort(
+    (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+  );
+  const oldestPrimary = sortedPrimaries[0];
+
+  // Convert all other primaries and their secondaries to link to oldest primary
+  for (let i = 1; i < sortedPrimaries.length; i++) {
+    const newerPrimary = sortedPrimaries[i];
+
+    // Update the newer primary
+    await Contact.findByIdAndUpdate(newerPrimary._id, {
+      linkPrecedence: 'secondary',
+      linkedId: oldestPrimary._id,
+    });
+
+    // Update all secondaries of the newer primary to link to oldest primary
+    const secondariesOfNewerPrimary = contacts.filter(
+      (c) =>
+        c.linkPrecedence === 'secondary' &&
+        c.linkedId &&
+        c.linkedId.toString() === newerPrimary._id.toString()
+    );
+
+    for (const secondary of secondariesOfNewerPrimary) {
+      await Contact.findByIdAndUpdate(secondary._id, {
+        linkedId: oldestPrimary._id,
+      });
+    }
+  }
+};
+
+/**
+ * Refetch contacts after database updates
+ * Used after operations that modify the database
+ * 
+ * @param {String} email
+ * @param {String} phoneNumber
+ * @returns {Promise<Array>} - Fresh contact group
+ */
+const refetchConnectedContacts = async (email, phoneNumber) => {
+  return fetchConnectedContacts(email, phoneNumber);
+};
+
+/**
  * Handle multiple primaries in same group (newer becomes secondary to older)
  * Updates database if needed
  * 
@@ -299,10 +362,12 @@ const buildIdentifyResponse = (primary, emails, phoneNumbers, allContacts) => {
 
 module.exports = {
   fetchConnectedContacts,
+  refetchConnectedContacts,
   resolvePrimary,
   consolidateContactInfo,
   isNewContactInfo,
   createOrLinkContact,
+  mergeContactGroups,
   fixMultiplePrimaries,
   buildIdentifyResponse,
 };
